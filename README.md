@@ -1,1 +1,1 @@
-# Functional_genomica_PhD
+# Functional_genomics_PhD
