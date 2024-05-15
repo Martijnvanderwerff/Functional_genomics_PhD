@@ -156,11 +156,11 @@ model = evaluate_models(
 cistopic_obj.add_LDA_model(model)
 
 # Write cistopic object with model to a pickle file
-with open("/groups/umcg-franke-scrna/tmp03/projects/multiome/ongoing/scenic_plus/pycistopic/monocytes_50000_cells_20_topics/cistopic_obj.pkl", 'wb') as f:
+with open("/groups/umcg-franke-scrna/tmp03/projects/multiome/ongoing/scenic_plus/pycistopic/monocytes_5000_cells_20_topics/cistopic_obj.pkl", 'wb') as f:
    pickle.dump(cistopic_obj, f)
 
 # Open cistopic object with model again is you start a new session
-with open("/groups/umcg-franke-scrna/tmp03/projects/multiome/ongoing/scenic_plus/pycistopic/monocytes_50000_cells_20_topics/cistopic_obj.pkl", "rb") as f:
+with open("/groups/umcg-franke-scrna/tmp03/projects/multiome/ongoing/scenic_plus/pycistopic/monocytes_5000_cells_20_topics/cistopic_obj.pkl", "rb") as f:
     cistopic_obj = pickle.load(f)
 
 # Clustering and visualization
@@ -369,10 +369,10 @@ plot_imputed_features(
 )
 
 # Write cistopic object with model to a pickle file
-with open("/groups/umcg-franke-scrna/tmp03/projects/multiome/ongoing/scenic_plus/pycistopic/monocytes_5000_cell_20_topics/cistopic_obj_newest.pkl", 'wb') as f:
+with open("/groups/umcg-franke-scrna/tmp03/projects/multiome/ongoing/scenic_plus/pycistopic/monocytes_5000_cells_20_topics/cistopic_obj.pkl", 'wb') as f:
    pickle.dump(cistopic_obj, f)
 
-with open("/groups/umcg-franke-scrna/tmp03/projects/multiome/ongoing/scenic_plus/pycistopic/monocytes_5000_cell_20_topics/cistopic_obj_newest.pkl", "rb") as f:
+with open("/groups/umcg-franke-scrna/tmp03/projects/multiome/ongoing/scenic_plus/pycistopic/monocytes_5000_cells_20_topics/cistopic_obj.pkl", "rb") as f:
     cistopic_obj = pickle.load(f)
 # Plot stimulation status and other metrics
 # Plot topics for monocytes
@@ -415,7 +415,7 @@ second_highest_topic = cell_topics.apply(lambda row: row.nlargest(2).index[-1],a
 cistopic_obj.cell_data['second_most_contributing_topic'] = second_highest_topic
 
 # Save updated cistopic object
-with open("/groups/umcg-franke-scrna/tmp03/projects/multiome/ongoing/scenic_plus/pycistopic/monocytes_5000_cell_20_topics/cistopic_obj_newest.pkl", 'wb') as f:
+with open("/groups/umcg-franke-scrna/tmp03/projects/multiome/ongoing/scenic_plus/pycistopic/monocytes_5000_cells_20_topics/cistopic_obj.pkl", 'wb') as f:
    pickle.dump(cistopic_obj, f)
 
 # Get list of all topics (second most contributing)
@@ -434,6 +434,7 @@ markers_dict= find_diff_features(
     cistopic_obj,
     imputed_acc_obj,
     variable='second_most_contributing_topic',
+    var_features=variable_regions,
     contrasts=input_query,
     adjpval_thr=0.05,
     log2fc_thr=np.log2(1.5),
@@ -466,4 +467,24 @@ print("---------------------")
 for x in marker_dicts_not_empty:
     print(f"  {x}: {len(marker_dicts_not_empty[x])}")
 
-    
+from pycisTopic.utils import region_names_to_coordinates
+
+# Save DARs monocytes 
+for topic in markers_dict:
+    region_names_to_coordinates(
+        markers_dict[topic].index
+    ).sort_values(
+        ["Chromosome", "Start", "End"]
+    ).to_csv(
+        os.path.join("/groups/umcg-franke-scrna/tmp03/projects/multiome/ongoing/scenic_plus/pycistopic/monocytes_5000_cell_20_topics/DARS_topic11_vs_other", "region_sets", f"{topic}.bed"),
+        sep = "\t",
+        header = False, index = False
+    )
+  
+with open("/groups/umcg-franke-scrna/tmp03/projects/multiome/ongoing/scenic_plus/pycistopic/monocytes_5000_cells_20_topics/cistopic_obj.pkl", 'wb') as f:
+   pickle.dump(cistopic_obj, f)
+
+# Write sampled cells to file so we can use those for subsetting the Seurat object
+with open('/groups/umcg-franke-scrna/tmp03/projects/multiome/ongoing/scenic_plus/pycistopic/monocytes_5000_cells_20_topics/cell_barcodes.txt', 'w') as f:
+    for barcode in cistopic_obj.cell_data.index.to_list():
+        f.write(f"{barcode}\n")
