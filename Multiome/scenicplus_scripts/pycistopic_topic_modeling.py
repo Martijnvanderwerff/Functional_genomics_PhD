@@ -11,6 +11,7 @@ from pycisTopic.lda_models import evaluate_models
 import pickle
 import numpy as np
 
+os.chdir('/groups/umcg-franke-scrna/tmp03/users/umcg-mwvanderwerff/Functional_genomics_PhD/Multiome/scenicplus_scripts')
 
 """
 To build a CistopicObject:
@@ -22,7 +23,7 @@ class CistopicObject:
     :class:`CistopicObject` contains the cell by fragment matrices (stored as counts :attr:`fragment_matrix` and as binary accessibility :attr:`binary_matrix`),
     cell metadata :attr:`cell_data`, region metadata :attr:`region_data` and path/s to the fragments file/s :attr:`path_to_fragments`.
 
-    LDA models from :class:`CisTopicLDAModel` can be stored :attr:`selected_model` as well as cell/region projections :attr:`projections` as a dictionary.
+    LDA models from :class:`Ci–sTopicLDAModel` can be stored :attr:`selected_model` as well as cell/region projections :attr:`projections` as a dictionary.
 
     Attributes
     ----------
@@ -56,7 +57,7 @@ print("Loaded sparse matrix!")
 # Sample range based on columns (cells)
 set.seed(639245)
 sample_range = range(0,125985)
-sample = choice(sample_range, 50000)
+sample = choice(sample_range, 10000)
 
 # Create dummy matrix
 fragment_matrix_dummy = fragment_matrix[:,sample]
@@ -80,16 +81,25 @@ cell_names_dummy = [cell_names[i] for i in sample]
 
 # Create dictionary with cell_names and index to later subset the fragments matrix as well
 cell_names_index_dict = dict(zip(cell_names_dummy, range(0,len(cell_names_dummy))))
+
 # Read region data
-region_data = pd.read_csv("/groups/umcg-franke-scrna/tmp03/projects/multiome/ongoing/signac_peaks/output/mo_peaks_lane1to64_monocyte.bed", sep="\t")
+region_data = pd.read_csv("/groups/umcg-franke-scrna/tmp03/projects/multiome/ongoing/signac_peaks/output/mo_peaks_lane1to80_monocyte.bed", sep="\t")
 region_data.index = region_names
-# region_data_dummy = region_data[region_data.index.isin(region_names_dummy)]
+
+# Filter region_data for regions that are in region_names, dims are not equal
+region_data = region_data[region_data['name'].isin(region_names)]
 
 # Fragment count cPeaks path
 fragment_path = "/groups/umcg-franke-scrna/tmp03/projects/multiome/ongoing/scenic_plus/pycistopic/matrices/monocyte/"
 
 # Cell metadata
-cell_metadata = pd.read_csv("/groups/umcg-franke-scrna/tmp03/projects/multiome/ongoing/metadata/mo_cellevel_metadata.tsv", sep="\t", dtype={'scrublet_doublet': str, 'filtered_condition': str})
+# Change dtypes based on this warning: 
+# <stdin>:1: DtypeWarning: Columns (15,20,36,51) have mixed types. Specify dtype option on import or set low_memory=False. 
+cell_metadata = pd.read_csv("/groups/umcg-franke-scrna/tmp03/projects/multiome/ongoing/metadata/mo_celllevel_metadata.tsv.gz", sep="\t", dtype={'confined_condition': 'category', 
+                                                                                                                                                'unconfined_condition': 'category',
+                                                                                                                                                'final_condition': 'category',
+                                                                                                                                                'LONG_COVID': 'category'})
+
 # Sort barcodes
 cell_metadata = cell_metadata.sort_values(by='barcode_lane')
 # Subset cell metadata 
@@ -123,10 +133,10 @@ print("Finished cisTopic object!")
 print(cistopic_obj)
 
 # Run mallet for LDA
-os.environ['MALLET_MEMORY'] = '200G'
+os.environ['MALLET_MEMORY'] = '250G'
 
 # Mallet path
-mallet_path = "/groups/umcg-franke-scrna/tmp03/users/umcg-mwvanderwerff/scenicplus/mallet/Mallet-202108/bin/mallet"
+mallet_path = "/groups/umcg-franke-scrna/tmp03/users/umcg-mwvanderwerff/scenicplus/Mallet-202108/bin/mallet"
 
 print("Runnign Mallet LDA..")
 models=run_cgs_models_mallet(
@@ -140,7 +150,7 @@ models=run_cgs_models_mallet(
     eta=0.1,
     eta_by_topic=False,
     tmp_path=os.environ["TMPDIR"],
-    save_path="/groups/umcg-franke-scrna/tmp03/projects/multiome/ongoing/scenic_plus/pycistopic/monocytes_50000_cells_20_topics",
+    save_path="/groups/umcg-franke-scrna/tmp03/projects/multiome/ongoing/scenic_plus/pycistopic/monocytes_10000_cells_20_topics",
     mallet_path=mallet_path,
 )
 
@@ -150,17 +160,25 @@ model = evaluate_models(
     models,
     select_model = 20,
     return_model = True,
-    save='figures/model_evaluation_mono_20_topics.pdf'
+    save='figures/model_evaluation_10000_mono_20_topics.pdf'
 )
 # Add model to cistopic object 
 cistopic_obj.add_LDA_model(model)
 
+# Change region data: first - to : 
+cistopic_obj.region_names = [i.replace('-', ':', 1) for i in cistopic_obj.region_names]
+cistopic_obj.region_data.name = [i.replace('-', ':', 1) for i in cistopic_obj.region_data.name]
+# Change index to region
+cistopic_obj.region_data.index = cistopic_obj.region_data.name
+cistopic_obj.selected_model.topic_region.index = [i.replace('-', ':', 1) for i in cistopic_obj.selected_model.topic_region.index]
+cistopic_obj.selected_model.region_topic.index = [i.replace('-', ':', 1) for i in cistopic_obj.selected_model.region_topic.index]
+
 # Write cistopic object with model to a pickle file
-with open("/groups/umcg-franke-scrna/tmp03/projects/multiome/ongoing/scenic_plus/pycistopic/monocytes_5000_cells_20_topics/cistopic_obj.pkl", 'wb') as f:
+with open("/groups/umcg-franke-scrna/tmp03/projects/multiome/ongoing/scenic_plus/pycistopic/monocytes_10000_cells_20_topics/cistopic_obj.pkl", 'wb') as f:
    pickle.dump(cistopic_obj, f)
 
 # Open cistopic object with model again is you start a new session
-with open("/groups/umcg-franke-scrna/tmp03/projects/multiome/ongoing/scenic_plus/pycistopic/monocytes_5000_cells_20_topics/cistopic_obj.pkl", "rb") as f:
+with open("/groups/umcg-franke-scrna/tmp03/projects/multiome/ongoing/scenic_plus/pycistopic/monocytes_10000_cells_20_topics/cistopic_obj.pkl", "rb") as f:
     cistopic_obj = pickle.load(f)
 
 # Clustering and visualization
@@ -193,11 +211,11 @@ run_umap(
 plot_metadata(
     cistopic_obj,
     reduction_name='UMAP',
-    variables=['cell_type_lowerres_imputed', 'pycisTopic_leiden_10_0.6', 'pycisTopic_leiden_10_1.2', 'pycisTopic_leiden_10_3'],
+    variables=['celltype_imputed_lowerres', 'pycisTopic_leiden_10_0.6', 'pycisTopic_leiden_10_1.2', 'pycisTopic_leiden_10_3'],
     target='cell', num_columns=4,
     text_size=10,
     dot_size=5,
-    save='figures/umap_20_topics_monocytes.pdf')
+    save='figures_10000_mono/umap_20_topics.pdf')
 
 # Annotate with scRNA-seq data from Seurat
 annot_dict = {}
@@ -206,7 +224,7 @@ for resolution in [0.6, 1.2, 3]:
     for cluster in set(cistopic_obj.cell_data[f"pycisTopic_leiden_10_{resolution}"]):
         counts = cistopic_obj.cell_data.loc[
             cistopic_obj.cell_data.loc[cistopic_obj.cell_data[f"pycisTopic_leiden_10_{resolution}"] == cluster].index,
-            "cell_type_lowerres_imputed"].value_counts()
+            "celltype_imputed_lowerres"].value_counts()
         annot_dict[f"pycisTopic_leiden_10_{resolution}"][cluster] = f"{counts.index[counts.argmax()]}({cluster})"
 
 for resolution in [0.6, 1.2, 3]:
@@ -224,22 +242,13 @@ plot_metadata(
     save='figures/umap_20_topics_monocytes_rna_annotated.pdf'
     )
 
-# Continues plot
-#plot_metadata(
-#    cistopic_obj,
-#    reduction_name='UMAP',
-#    variables=['log10_unique_fragments_count', 'tss_enrichment', 'Doublet_scores_fragments', 'fraction_of_fragments_in_peaks'],
-#    target='cell', num_columns=4,
-#    text_size=10,
-#    dot_size=5)
-
 # Plot monocytes and color for topic contribution
 plot_topic(
     cistopic_obj,
     reduction_name = 'UMAP',
     target = 'cell',
     num_columns=4,
-    save='figures/umap_20_topics_monocytes_colored_by_topics.pdf'
+    save='figures_10000_mono/umap_20_topics_monocytes_colored_by_topics.pdf'
 )
 
 # Heatmap of topics, does not work yet
@@ -254,20 +263,28 @@ cell_topic_heatmap(
 
 from pycisTopic.topic_binarization import binarize_topics
 
-# Region bin topics plot binarization
-region_bin_topics_top_3k = binarize_topics(
+# Region binarization using Otsu, Li and nTopics models
+binarized_otsu = binarize_topics(
     cistopic_obj, method='otsu',
-    plot=True, num_columns=4, save='figures/region_bin_plot_topics.pdf'
+    plot=True, num_columns=4, save='figures_10000_mono/binarized_otsu.pdf'
 )
 
-binarized_cell_topic = binarize_topics(
+binarized_li = binarize_topics(
     cistopic_obj,
     target='cell',
     method='li',
     plot=True,
     num_columns=5, nbins=100,
-    save='figures/binarized_cell_topics.pdf'
+    save='figures_10000_mono/binarized_li.pdf'
     )
+
+# run ntop for downstream analysis
+binarized_3k_ntop = binarize_topics(
+    cistopic_obj, method='ntop', ntop = 3_000,
+    plot=True, num_columns=5,
+    save='figures_10000_mono/binarized_ntop_3k.pdf'
+
+)
 
 """
 Following, we can compute the topic quality control metrics. These include:
@@ -292,19 +309,19 @@ topic_qc_metrics = compute_topic_metrics(cistopic_obj)
 
 # Create dictionary with all QC figures
 fig_dict={}
-fig_dict['CoherenceVSAssignments']=plot_topic_qc(topic_qc_metrics, var_x='Coherence', var_y='Log10_Assignments', var_color='Gini_index', plot=False, return_fig=True, save='figures/coherence_vs_assignments_20_topics_5000_monocytes.pdf')
-fig_dict['AssignmentsVSCells_in_bin']=plot_topic_qc(topic_qc_metrics, var_x='Log10_Assignments', var_y='Cells_in_binarized_topic', var_color='Gini_index', plot=False, return_fig=True, save='figures/assignments_vs_cell_in_bin_20_topics_5000_monocytes.pdf')
-fig_dict['CoherenceVSCells_in_bin']=plot_topic_qc(topic_qc_metrics, var_x='Coherence', var_y='Cells_in_binarized_topic', var_color='Gini_index', plot=False, return_fig=True, save='figures/coherence_vs_cell_in_bin_20_topics_5000_monocytes.pdf')
-fig_dict['CoherenceVSRegions_in_bin']=plot_topic_qc(topic_qc_metrics, var_x='Coherence', var_y='Regions_in_binarized_topic', var_color='Gini_index', plot=False, return_fig=True, save='figures/coherence_vs_regions_20_topics_5000_monocytes.pdf')
-fig_dict['CoherenceVSMarginal_dist']=plot_topic_qc(topic_qc_metrics, var_x='Coherence', var_y='Marginal_topic_dist', var_color='Gini_index', plot=False, return_fig=True, save='figures/coherence_vs_marginal_dist_20_topics_5000_monocytes.pdf')
-fig_dict['CoherenceVSGini_index']=plot_topic_qc(topic_qc_metrics, var_x='Coherence', var_y='Gini_index', var_color='Gini_index', plot=False, return_fig=True, save='figures/coherence_vs_gini_index_20_topics_5000_monocytes.pdf')
+fig_dict['CoherenceVSAssignments']=plot_topic_qc(topic_qc_metrics, var_x='Coherence', var_y='Log10_Assignments', var_color='Gini_index', plot=False, return_fig=True, save='figures_10000_mono/coherence_vs_assignments_20_topics_5000_monocytes.pdf')
+fig_dict['AssignmentsVSCells_in_bin']=plot_topic_qc(topic_qc_metrics, var_x='Log10_Assignments', var_y='Cells_in_binarized_topic', var_color='Gini_index', plot=False, return_fig=True, save='figures_10000_mono/assignments_vs_cell_in_bin_20_topics_5000_monocytes.pdf')
+fig_dict['CoherenceVSCells_in_bin']=plot_topic_qc(topic_qc_metrics, var_x='Coherence', var_y='Cells_in_binarized_topic', var_color='Gini_index', plot=False, return_fig=True, save='figures_10000_mono/coherence_vs_cell_in_bin_20_topics_5000_monocytes.pdf')
+fig_dict['CoherenceVSRegions_in_bin']=plot_topic_qc(topic_qc_metrics, var_x='Coherence', var_y='Regions_in_binarized_topic', var_color='Gini_index', plot=False, return_fig=True, save='figures_10000_mono/coherence_vs_regions_20_topics_5000_monocytes.pdf')
+fig_dict['CoherenceVSMarginal_dist']=plot_topic_qc(topic_qc_metrics, var_x='Coherence', var_y='Marginal_topic_dist', var_color='Gini_index', plot=False, return_fig=True, save='figures_10000_mono/coherence_vs_marginal_dist_20_topics_5000_monocytes.pdf')
+fig_dict['CoherenceVSGini_index']=plot_topic_qc(topic_qc_metrics, var_x='Coherence', var_y='Gini_index', var_color='Gini_index', plot=False, return_fig=True, save='figures_10000_mono/coherence_vs_gini_index_20_topics_5000_monocytes.pdf')
 
-cistopic_obj.cell_data['cell_type_lowerres_imputed_mono'] = 'monocyte'
+cistopic_obj.cell_data['celltype_imputed_lowerres_mono'] = 'monocyte'
 
 topic_annot = topic_annotation(
     cistopic_obj,
-    annot_var='cell_type_lowerres_imputed',
-    binarized_cell_topic=binarized_cell_topic,
+    annot_var='celltype_imputed_lowerres',
+    binarized_cell_topic=binarized_li,
     general_topic_thr = 0.2
 )
 
@@ -336,25 +353,11 @@ variable_regions = find_highly_variable_features(
     n_bins=20,
     n_top_features=None,
     plot=True,
-    save='figures/variable_regions_20_topics_5000_monocytes.pdf'
+    save='figures_10000_mono/variable_regions_20_topics_5000_monocytes.pdf'
 )
 
 # Get the amount of variable regions
 len(variable_regions)
-
-# Find variable regions for stimulated and unstimulated monocytes
-markers_dict= find_diff_features(
-    cistopic_obj,
-    imputed_acc_obj,
-    variable='filtered_condition_imputed',
-    var_features=variable_regions,
-    contrasts=None,
-    adjpval_thr=0.05,
-    log2fc_thr=np.log2(1.5),
-    n_cpu=4,
-    _temp_dir=os.environ["TMPDIR"],
-    split_pattern = '_'
-)
 
 from pycisTopic.clust_vis import plot_imputed_features
 
@@ -369,65 +372,42 @@ plot_imputed_features(
 )
 
 # Write cistopic object with model to a pickle file
-with open("/groups/umcg-franke-scrna/tmp03/projects/multiome/ongoing/scenic_plus/pycistopic/monocytes_5000_cells_20_topics/cistopic_obj.pkl", 'wb') as f:
+with open("/groups/umcg-franke-scrna/tmp03/projects/multiome/ongoing/scenic_plus/pycistopic/monocytes_10000_cells_20_topics/cistopic_obj.pkl", 'wb') as f:
    pickle.dump(cistopic_obj, f)
 
-with open("/groups/umcg-franke-scrna/tmp03/projects/multiome/ongoing/scenic_plus/pycistopic/monocytes_5000_cells_20_topics/cistopic_obj.pkl", "rb") as f:
+with open("/groups/umcg-franke-scrna/tmp03/projects/multiome/ongoing/scenic_plus/pycistopic/monocytes_10000_cells_20_topics/cistopic_obj.pkl", "rb") as f:
     cistopic_obj = pickle.load(f)
-# Plot stimulation status and other metrics
-# Plot topics for monocytes
 
-azimuth_annotation = pd.read_csv('/groups/umcg-franke-scrna/tmp03/projects/multiome/ongoing/cell_type_assignment/azimuth/10x_multiome_PBMCs/mo_azimuth_ct_10xmultiome.tsv', sep='\t')
-azimuth_annotation = azimuth_annotation[azimuth_annotation['barcode'].isin(cistopic_obj.cell_data['barcode_lane'])]
-
-azimuth_annotation = azimuth_annotation.sort_values(by=['barcode'])
-cistopic_obj.cell_data = cistopic_obj.cell_data.sort_values(by=['barcode_lane'])
-cistopic_obj.cell_data['predicted.mo_10x_cell_type'] = azimuth_annotation['predicted.mo_10x_cell_type'].to_list()
-
+# Plot cell types
 plot_metadata(
     cistopic_obj,
     reduction_name='UMAP',
-    variables=['filtered_condition_imputed','predicted.mo_10x_cell_type'],
+    variables=['celltype_imputed'],
     target='cell', num_columns=2,
     text_size=10,
     dot_size=5,
-    save='figures/umap_condition_cell_sub_type.pdf')
-
-binarized_cell_topic = binarize_topics(
-    cistopic_obj,
-    target='cell',
-    method='li',
-    plot=True,
-    num_columns=5, nbins=100)
-
-topic_annot = topic_annotation(
-    cistopic_obj,
-    annot_var='predicted.mo_10x_cell_type',
-    binarized_cell_topic=binarized_cell_topic,
-    general_topic_thr = 0.2
-)
+    save='figures_10000_mono/umap_condition_cell_sub_type.pdf')
 
 # Add topic to which a cell contributes the most to the cell_data for each cell
 cell_topics = cistopic_obj.selected_model.cell_topic.T
 # Ignoring highest topic 16 for every cell, so getting second largest topic contribution
-second_highest_topic = cell_topics.apply(lambda row: row.nlargest(2).index[-1],axis=1)
+second_highest_topic = cell_topics.apply(lambda row: row.nlargest(1).index[-1],axis=1)
 # Add to cell_data \
-cistopic_obj.cell_data['second_most_contributing_topic'] = second_highest_topic
+cistopic_obj.cell_data['most_contributing_topic'] = second_highest_topic
 
 # Save updated cistopic object
-with open("/groups/umcg-franke-scrna/tmp03/projects/multiome/ongoing/scenic_plus/pycistopic/monocytes_5000_cells_20_topics/cistopic_obj.pkl", 'wb') as f:
+with open("/groups/umcg-franke-scrna/tmp03/projects/multiome/ongoing/scenic_plus/pycistopic/monocytes_10000_cells_20_topics/cistopic_obj.pkl", 'wb') as f:
    pickle.dump(cistopic_obj, f)
 
+# Topic 5 seems to show the most information of CD16 monocytes 
+
 # Get list of all topics (second most contributing)
-topics_dars_compare_with_topic_11 = cistopic_obj.cell_data.second_most_contributing_topic.unique().tolist()
-# Remove topic 11 which we want to compare 
-topics_dars_compare_with_topic_11.pop(7)
-# Imput query DARs
-input_query = [[['Topic11'], ['Topic7']], [['Topic11'], ['Topic10']], [['Topic11'], ['Topic8']],
-               [['Topic11'], ['Topic6']], [['Topic11'], ['Topic19']], [['Topic11'], ['Topic20']],
-               [['Topic11'], ['Topic17']], [['Topic11'], ['Topic15']], [['Topic11'], ['Topic18']],
-               [['Topic11'], ['Topic3']], [['Topic11'], ['Topic12']], [['Topic11'], ['Topic5']],
-               [['Topic11'], ['Topic13']]]
+topics_dars_compare_with_topic_5 = cistopic_obj.cell_data.second_most_contributing_topic.unique().tolist()
+# Remove topic 5 which we want to compare 
+topics_dars_compare_with_topic_5.pop(3)
+
+# Removed topic7 beause of issues in SCENIC+ workflow
+#input_query = [[['Topic11'], ['Topic9', 'Topic7', 'Topic4']]]
 
 # Run DAR analysis
 markers_dict= find_diff_features(
@@ -435,7 +415,7 @@ markers_dict= find_diff_features(
     imputed_acc_obj,
     variable='second_most_contributing_topic',
     var_features=variable_regions,
-    contrasts=input_query,
+ #   contrasts=input_query,
     adjpval_thr=0.05,
     log2fc_thr=np.log2(1.5),
     n_cpu=4,
@@ -445,27 +425,14 @@ markers_dict= find_diff_features(
 
 from pycisTopic.clust_vis import plot_imputed_features
 
-# Get non-empty results (some dicts were emtpy --> no DARs)
-marker_dicts_not_empty = {k:v for (k,v) in markers_dict.items() if not v.empty}
-
-# Get all keys of our markers_dict
-comparisons = list(marker_dicts_not_empty.keys())
-
-plot_imputed_features(
-    cistopic_obj,
-    reduction_name='UMAP',
-    imputed_data=imputed_acc_obj,
-    features=[markers_dict[x].index.tolist()[0] for x in comparisons],
-    scale=False,
-    num_columns=3,
-    save='figures/DARs_topic_11_vs_others.pdf'
-)
-
 # Number of DARs
 print("Number of DARs found:")
 print("---------------------")
-for x in marker_dicts_not_empty:
-    print(f"  {x}: {len(marker_dicts_not_empty[x])}")
+for x in markers_dict:
+    print(f"  {x}: {len(markers_dict[x])}")
+
+# Get non-empty results (some dicts were emtpy --> no DARs)
+markers_dict = {k:v for (k,v) in markers_dict.items() if not v.empty}
 
 from pycisTopic.utils import region_names_to_coordinates
 
@@ -476,15 +443,38 @@ for topic in markers_dict:
     ).sort_values(
         ["Chromosome", "Start", "End"]
     ).to_csv(
-        os.path.join("/groups/umcg-franke-scrna/tmp03/projects/multiome/ongoing/scenic_plus/pycistopic/monocytes_5000_cell_20_topics/DARS_topic11_vs_other", "region_sets", f"{topic}.bed"),
+        os.path.join("/groups/umcg-franke-scrna/tmp03/projects/multiome/ongoing/scenic_plus/pycistopic/monocytes_10000_cells_20_topics/", "region_sets/DARS_topics_vs_others", f"{topic}.bed"),
         sep = "\t",
         header = False, index = False
     )
-  
-with open("/groups/umcg-franke-scrna/tmp03/projects/multiome/ongoing/scenic_plus/pycistopic/monocytes_5000_cells_20_topics/cistopic_obj.pkl", 'wb') as f:
+
+# Save 3k topics, removed topic 18 because of issues
+for topic in binarized_3k_ntop:
+    region_names_to_coordinates(
+        binarized_3k_ntop[topic].index
+    ).sort_values(
+        ["Chromosome", "Start", "End"]
+    ).to_csv(
+        os.path.join('/groups/umcg-franke-scrna/tmp03/projects/multiome/ongoing/scenic_plus/pycistopic/monocytes_10000_cells_20_topics/', "region_sets", "Topics_top_3k", f"{topic}.bed"),
+        sep = "\t",
+        header = False, index = False
+    )
+
+for topic in binarized_otsu:
+    region_names_to_coordinates(
+        binarized_otsu[topic].index
+    ).sort_values(
+        ["Chromosome", "Start", "End"]
+    ).to_csv(
+        os.path.join('/groups/umcg-franke-scrna/tmp03/projects/multiome/ongoing/scenic_plus/pycistopic/monocytes_10000_cells_20_topics/', "region_sets", "Topics_otsu", f"{topic}.bed"),
+        sep = "\t",
+        header = False, index = False
+    )
+
+with open("/groups/umcg-franke-scrna/tmp03/projects/multiome/ongoing/scenic_plus/pycistopic/monocytes_10000_cells_20_topics/cistopic_obj.pkl", 'wb') as f:
    pickle.dump(cistopic_obj, f)
 
 # Write sampled cells to file so we can use those for subsetting the Seurat object
-with open('/groups/umcg-franke-scrna/tmp03/projects/multiome/ongoing/scenic_plus/pycistopic/monocytes_5000_cells_20_topics/cell_barcodes.txt', 'w') as f:
+with open('/groups/umcg-franke-scrna/tmp03/projects/multiome/ongoing/scenic_plus/pycistopic/monocytes_10000_cells_20_topics/cell_barcodes.txt', 'w') as f:
     for barcode in cistopic_obj.cell_data.index.to_list():
         f.write(f"{barcode}\n")
